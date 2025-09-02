@@ -114,7 +114,7 @@ const startHeartbeat = (server: Server) => {
   const beat = () => {
     Promise.race([
       server.ping(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('ping timeout')), 5000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('ping timeout')), 10 * 60 * 1000)),
     ]).then(() => {
       setTimeout(beat, 3000);
     }).catch(() => {
