@@ -16,6 +16,7 @@
 
 import { z } from 'zod';
 
+import { imageSize } from 'image-size';
 import { defineTabTool } from './tool.js';
 import * as javascript from '../utils/codegen.js';
 import { generateLocator } from './utils.js';
@@ -27,17 +28,11 @@ const screenshotSchema = z.object({
   filename: z.string().optional().describe('File name to save the screenshot to. Defaults to `page-{timestamp}.{png|jpeg}` if not specified.'),
   element: z.string().optional().describe('Human-readable element description used to obtain permission to screenshot the element. If not provided, the screenshot will be taken of viewport. If element is provided, ref must be provided too.'),
   ref: z.string().optional().describe('Exact target element reference from the page snapshot. If not provided, the screenshot will be taken of viewport. If ref is provided, element must be provided too.'),
-  fullPage: z.boolean().optional().describe('When true, takes a screenshot of the full scrollable page, instead of the currently visible viewport. Cannot be used with element screenshots.'),
 }).refine(data => {
   return !!data.element === !!data.ref;
 }, {
   message: 'Both element and ref must be provided or neither.',
   path: ['ref', 'element']
-}).refine(data => {
-  return !(data.fullPage && (data.element || data.ref));
-}, {
-  message: 'fullPage cannot be used with element screenshots.',
-  path: ['fullPage']
 });
 
 const screenshot = defineTabTool({
@@ -58,11 +53,10 @@ const screenshot = defineTabTool({
       quality: fileType === 'png' ? undefined : 90,
       scale: 'css',
       path: fileName,
-      ...(params.fullPage !== undefined && { fullPage: params.fullPage })
     };
     const isElementScreenshot = params.element && params.ref;
 
-    const screenshotTarget = isElementScreenshot ? params.element : (params.fullPage ? 'full page' : 'viewport');
+    const screenshotTarget = isElementScreenshot ? params.element : 'viewport';
     response.addCode(`// Screenshot ${screenshotTarget} and save it as ${fileName}`);
 
     // Only get snapshot when element screenshot is needed
@@ -76,14 +70,16 @@ const screenshot = defineTabTool({
     const buffer = locator ? await locator.screenshot(options) : await tab.page.screenshot(options);
     response.addResult(`Took the ${screenshotTarget} screenshot and saved it as ${fileName}`);
 
-    // https://github.com/microsoft/playwright-mcp/issues/817
-    // Never return large images to LLM, saving them to the file system is enough.
-    if (!params.fullPage) {
-      response.addImage({
-        contentType: fileType === 'png' ? 'image/png' : 'image/jpeg',
-        data: buffer
-      });
+    const dimensions = imageSize(buffer);
+    if (dimensions.width > 3000 && dimensions.height > 3000) {
+      response.addResult('Screenshot is too big (larger than 3000x3000 pixels).');
+      return;
     }
+
+    response.addImage({
+      contentType: fileType === 'png' ? 'image/png' : 'image/jpeg',
+      data: buffer
+    });
   }
 });
 
