@@ -14,38 +14,17 @@ on:
 # These permissions are needed to interact with GitHub's OIDC Token endpoint.
 permissions:
   id-token: write
-  packages: read 
+  packages: read
   contents: read
 
 env:
   PUSH: ${{ github.event_name != 'pull_request' }}
 
 jobs:
-  publish-npm:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
-      id-token: write # Needed for npm provenance
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          registry-url: https://registry.npmjs.org/
-      - run: npm ci
-        env:
-          GITHUB_NPM_REGISTRY_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: npx playwright install --with-deps
-      - run: npm run build
-      - run: npm run lint
-      - run: npm run ctest
-
   publish-docker:
     name: Publish to Docker
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: publish-npm
     permissions:
       contents: read
       packages: read
