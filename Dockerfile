@@ -13,22 +13,30 @@ ENV PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH}
 # Set the working directory
 WORKDIR /app
 
-RUN --mount=type=cache,target=/root/.npm,sharing=locked,id=npm-cache \
+RUN --mount=type=secret,id=npm_token \
+    --mount=type=cache,target=/root/.npm,sharing=locked,id=npm-cache \
     --mount=type=bind,source=package.json,target=package.json \
     --mount=type=bind,source=package-lock.json,target=package-lock.json \
-  npm ci --omit=dev && \
-  # Install system dependencies for playwright
-  npx -y playwright-core install-deps chromium
+    echo "//npm.pkg.github.com/:_authToken=$(cat /run/secrets/npm_token)" > ~/.npmrc && \
+    echo "@exaforce:registry=https://npm.pkg.github.com" >> ~/.npmrc && \
+    npm ci --omit=dev && \
+    rm -f ~/.npmrc && \
+    # Install system dependencies for playwright
+    npx -y playwright-core install-deps chromium
 
 # ------------------------------
 # Builder
 # ------------------------------
 FROM base AS builder
 
-RUN --mount=type=cache,target=/root/.npm,sharing=locked,id=npm-cache \
+RUN --mount=type=secret,id=npm_token \
+    --mount=type=cache,target=/root/.npm,sharing=locked,id=npm-cache \
     --mount=type=bind,source=package.json,target=package.json \
     --mount=type=bind,source=package-lock.json,target=package-lock.json \
-  npm ci
+    echo "//npm.pkg.github.com/:_authToken=$(cat /run/secrets/npm_token)" > ~/.npmrc && \
+    echo "@exaforce:registry=https://npm.pkg.github.com" >> ~/.npmrc && \
+    npm ci && \
+    rm -f ~/.npmrc
 
 # Copy the rest of the app
 COPY *.json *.js *.ts .
